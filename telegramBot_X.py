@@ -1,6 +1,7 @@
 # broke_task_bot_v23.py
 import logging
 import requests
+import os
 from pymongo import MongoClient
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -11,6 +12,17 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from dotenv import load_dotenv
+
+# ---------------- LOAD ENV ----------------
+load_dotenv()
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
+BOT_WALLET = os.getenv("BOT_WALLET")
+GROUP_ID = int(os.getenv("GROUP_ID"))
+ADMINS = [int(x) for x in os.getenv("ADMINS").split(",")]
+MONGO_URI = os.getenv("MONGO_URI")
 
 # ---------------- LOGGING ----------------
 logging.basicConfig(
@@ -19,19 +31,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---------------- CONFIG ----------------
-TELEGRAM_TOKEN = "8448248703:AAHomMs8NQvp0ILw2mVIJhlpJUxDdoq-W7A"
-X_BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAALH74QEAAAAAz8ldp%2FYEz%2BBenewoQ003Uts1sv4%3DDbCvfD9XUlnPpwuIh08TxUOB2zTZqCn3gCYREwXWZE8lJ1PMzs"
-BOT_WALLET = "CnQbz6eS3UvUbXewVCN861ue2qXZ2EG7s5Lkxp4hDExD"
-
-# ---------------- GROUP CONFIG ----------------
-GROUP_ID = -4927456409  # Replace with your group chat ID
-
-# ---------------- ADMIN CONFIG ----------------
-ADMINS = [5864326175]  # Telegram ID(s) of admin(s)
-
 # ---------------- MONGO DB ----------------
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient(MONGO_URI)
 db = client['broke_bot']
 users_col = db['users']
 tasks_col = db['tasks']
