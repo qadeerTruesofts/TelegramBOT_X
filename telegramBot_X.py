@@ -13,17 +13,65 @@ from telegram.ext import (
     filters
 )
 from dotenv import load_dotenv
+from solana.rpc.api import Client
+from solders.keypair import Keypair
+from solders.pubkey import Pubkey
+from solders.transaction import Transaction
+from solders.system_program import transfer, TransferParams
 
 # ---------------- LOAD ENV ----------------
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN")
+ADMIN_PRIVATE_KEY = eval(os.getenv("ADMIN_PRIVATE_KEY"))  # loads as list of ints
 BOT_WALLET = os.getenv("BOT_WALLET")
 GROUP_ID = int(os.getenv("GROUP_ID"))
 ADMINS = [int(x) for x in os.getenv("ADMINS").split(",")]
 MONGO_URI = os.getenv("MONGO_URI")
 
+# -----------Connect to Solana Devnet----------------
+solana_client = Client("https://api.devnet.solana.com")
+
+def send_reward(admin_private_key_list, to_wallet_str, amount_sol):
+    """
+    Send SOL from admin wallet to user's wallet using solders.
+    """
+    try:
+        # Load admin wallet
+        sender = Keypair.from_bytes(bytes(admin_private_key_list))
+
+        # Receiver wallet
+        receiver = Pubkey.from_string(to_wallet_str)
+
+        # Create transfer instruction
+        tx_instruction = transfer(
+            TransferParams(
+                from_pubkey=sender.pubkey(),
+                to_pubkey=receiver,
+                lamports=int(amount_sol * 1_000_000_000)  # Convert SOL → lamports
+            )
+        )
+
+        # Build & sign transaction
+        blockhash = solana_client.get_latest_blockhash().value.blockhash
+        txn = Transaction.new_signed_with_payer(
+            [tx_instruction],        # instructions
+            sender.pubkey(),         # payer
+            [sender],                # signers
+            blockhash                # recent blockhash
+        )
+
+        # Send transaction
+        response = solana_client.send_transaction(txn)
+
+        print("✅ Transaction submitted!")
+        print("Explorer link: https://explorer.solana.com/tx/" + str(response.value) + "?cluster=devnet")
+
+        return response
+    except Exception as e:
+        return {"error": str(e)}
+    
 # ---------------- LOGGING ----------------
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -63,10 +111,10 @@ def verify_x_comment(tweet_id, username):
 
     if "data" in data:
         for tweet in data["data"]:
-            if "$Broke" in tweet["text"]:
+            if "NoDoubt" in tweet["text"]:
                 logger.info("✅ Comment verification passed")
                 return True
-        logger.warning("❌ No matching comment with '$Broke'")
+        logger.warning("❌ No matching comment with 'NoDoubt'")
     else:
         logger.warning("❌ No comments found in API response")
 
@@ -150,9 +198,16 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("Verify", callback_data=f"verify|{task_id}|0")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    message_text = (
+    f"**📌 New Task #{task_id}!**\n\n"
+    f"**Comment $Broke on this post and Retweet this post.**\n\n"
+    f"💰 Reward: {reward} Broke Coin\n"
+    f"🔗 Tweet: {tweet_url}"
+)
     await context.bot.send_message(
         chat_id=GROUP_ID,
-        text=f"📌 New Task #{task_id}!\nReward: {reward} Broke Coin\nTweet: {tweet_url}",
+        text=message_text,
+        parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
@@ -193,13 +248,41 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"$push": {"telegram_ids": telegram_id}}
             )
             reward = tasks_col.find_one({"task_id": task_id})['reward']
+            user_wallet = user.get("wallet")
+
+            # Send reward
+            tx_result = send_reward(ADMIN_PRIVATE_KEY, user_wallet, reward)
+
+            if "error" in tx_result:
+                logger.error(f"❌ Transaction failed: {tx_result['error']}")
+                await query.edit_message_text("❌ Verification passed but reward transfer failed.")
+                await query.message.reply_text(
+                    f"⚠️ Sorry {query.from_user.first_name}, verification succeeded "
+                    f"but the reward transaction failed.\n\nError: {tx_result['error']}"
+                )
+            else:
+                sig = str(tx_result.value)
+                explorer_url = f"https://explorer.solana.com/tx/{sig}?cluster=devnet"
+                logger.info(f"✅ Transaction successful: {sig}")
+
+                await query.edit_message_text(
+                    f"✅ Verified! {reward} Broke Coin sent to your wallet.\n🔗 [View on Explorer]({explorer_url})",
+                    parse_mode="Markdown"
+                )
+
             logger.info(f"✅ Task #{task_id} verified for user {telegram_id}, reward={reward}")
             await query.edit_message_text(f"✅ Verified! {reward} Broke Coin sent to your wallet.")
+              # Also send a group message so it's visible like failure messages
+            await query.message.reply_text(
+                f"🎉 Congratulations {query.from_user.first_name}!! "
+                f"You have completed Task #{task_id}.\n\n"
+                f"💰 Reward: {reward} Broke Coin has been added to your wallet."
+            )
         else:
             logger.warning(f"❌ Task #{task_id} verification failed for user {telegram_id}, comment_ok={comment_ok}, retweet_ok={retweet_ok}")
             await query.message.reply_text(
                 f"❌ {update.callback_query.from_user.first_name}, verification failed. "
-                "Make sure you commented '$Broke' and retweeted the post."
+                "Make sure you commented 'NoDoubt' and retweeted the post."
             )
 
 # ---------------- MAIN ----------------
