@@ -1,8 +1,13 @@
+import os
+from dotenv import load_dotenv
 from solana.rpc.api import Client
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.transaction import Transaction
 from solders.system_program import transfer, TransferParams
+
+# Load environment variables
+load_dotenv()
 
 # Connect to Devnet
 solana_client = Client("https://api.devnet.solana.com")
@@ -44,12 +49,8 @@ def send_reward(admin_private_key_list, to_wallet_str, amount_sol):
 
 # ----------------- TEST -----------------
 if __name__ == "__main__":
-    ADMIN_PRIVATE_KEY = [
-        208, 73, 86, 113, 253, 109, 116, 182, 66, 203, 7, 113, 167, 204, 3, 116,
-        147, 181, 168, 253, 159, 73, 71, 229, 204, 216, 154, 197, 216, 163, 227, 222,
-        134, 173, 75, 77, 226, 221, 91, 212, 87, 247, 231, 3, 174, 14, 92, 3,
-        232, 107, 32, 10, 111, 46, 195, 133, 123, 69, 236, 175, 2, 107, 112, 36
-    ]
+    # Get keys from .env
+    ADMIN_PRIVATE_KEY = list(map(int, os.getenv("ADMIN_PRIVATE_KEY").split(",")))
     USER_WALLET = "GZE5pxLwMf9VqJ6QkPTMNvav8yMiN3dtwpXvDR6DcY6q"
 
     result = send_reward(ADMIN_PRIVATE_KEY, USER_WALLET, 0.01)
