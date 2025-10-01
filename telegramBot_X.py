@@ -111,10 +111,10 @@ def verify_x_comment(tweet_id, username):
 
     if "data" in data:
         for tweet in data["data"]:
-            if "NoDoubt" in tweet["text"]:
+            if "$Broke" in tweet["text"]:
                 logger.info("✅ Comment verification passed")
                 return True
-        logger.warning("❌ No matching comment with 'NoDoubt'")
+        logger.warning("❌ No matching comment with '$Broke'")
     else:
         logger.warning("❌ No comments found in API response")
 
@@ -282,7 +282,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"❌ Task #{task_id} verification failed for user {telegram_id}, comment_ok={comment_ok}, retweet_ok={retweet_ok}")
             await query.message.reply_text(
                 f"❌ {update.callback_query.from_user.first_name}, verification failed. "
-                "Make sure you commented 'NoDoubt' and retweeted the post."
+                "Make sure you commented '$Broke' and retweeted the post."
             )
 
 # ---------------- MAIN ----------------
